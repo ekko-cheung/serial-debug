@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#27324d"/>
+      <stop offset="1" stop-color="#0e1424"/>
+    </linearGradient>
+    <linearGradient id="shell" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e2e8f0"/>
+      <stop offset="1" stop-color="#94a3b8"/>
+    </linearGradient>
+    <radialGradient id="body" cx="0.5" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#ff8a4c"/>
+      <stop offset="1" stop-color="#d9400f"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="8" y="8" width="240" height="240" rx="54" fill="url(#bg)"/>
+  <rect x="8" y="8" width="240" height="240" rx="54" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="2"/>
+
+  <!-- legs -->
+  <g stroke="#c2410c" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M96 112 L62 122 L50 144"/>
+    <path d="M98 124 L68 142 L62 164"/>
+    <path d="M106 134 L88 156 L88 168"/>
+    <path d="M160 112 L194 122 L206 144"/>
+    <path d="M158 124 L188 142 L194 164"/>
+    <path d="M150 134 L168 156 L168 168"/>
+  </g>
+
+  <!-- arms -->
+  <g stroke="#e8541e" stroke-width="11" stroke-linecap="round" fill="none">
+    <path d="M92 94 Q64 92 54 66"/>
+    <path d="M164 94 Q192 92 202 66"/>
+  </g>
+
+  <!-- claws -->
+  <g fill="#f26a2e">
+    <path d="M54 66 C34 62 26 38 40 26 C46 22 52 26 52 34 L58 40 L64 30 C72 26 80 32 78 42 C76 54 66 66 54 66 Z"/>
+    <path d="M202 66 C222 62 230 38 216 26 C210 22 204 26 204 34 L198 40 L192 30 C184 26 176 32 178 42 C180 54 190 66 202 66 Z"/>
+  </g>
+
+  <!-- eye stalks + eyes -->
+  <g stroke="#e8541e" stroke-width="5" stroke-linecap="round">
+    <line x1="112" y1="80" x2="110" y2="62"/>
+    <line x1="144" y1="80" x2="146" y2="62"/>
+  </g>
+  <circle cx="110" cy="56" r="9" fill="#ffffff"/>
+  <circle cx="146" cy="56" r="9" fill="#ffffff"/>
+  <circle cx="111" cy="57" r="4.5" fill="#1f2937"/>
+  <circle cx="145" cy="57" r="4.5" fill="#1f2937"/>
+
+  <!-- body -->
+  <ellipse cx="128" cy="106" rx="46" ry="34" fill="url(#body)"/>
+  <ellipse cx="116" cy="94" rx="20" ry="9" fill="#ffffff" fill-opacity="0.18"/>
+  <path d="M112 116 Q128 128 144 116" stroke="#7c2d12" stroke-width="4" stroke-linecap="round" fill="none"/>
+
+  <!-- DB9 serial connector -->
+  <g stroke-linejoin="round">
+    <path d="M58 170 H198 L184 218 H72 Z" fill="url(#shell)" stroke="#64748b" stroke-width="4"/>
+    <path d="M70 179 H186 L176 209 H80 Z" fill="#111827"/>
+  </g>
+  <g fill="#fbbf24">
+    <circle cx="86" cy="190" r="4.5"/>
+    <circle cx="107" cy="190" r="4.5"/>
+    <circle cx="128" cy="190" r="4.5"/>
+    <circle cx="149" cy="190" r="4.5"/>
+    <circle cx="170" cy="190" r="4.5"/>
+    <circle cx="96" cy="201" r="4.5"/>
+    <circle cx="117" cy="201" r="4.5"/>
+    <circle cx="139" cy="201" r="4.5"/>
+    <circle cx="160" cy="201" r="4.5"/>
+  </g>
+  <circle cx="60" cy="186" r="5" fill="#cbd5e1" stroke="#64748b" stroke-width="2"/>
+  <circle cx="196" cy="186" r="5" fill="#cbd5e1" stroke="#64748b" stroke-width="2"/>
+</svg>
