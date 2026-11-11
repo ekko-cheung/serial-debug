@@ -5,6 +5,7 @@ mod codec;
 mod model;
 mod serial;
 mod storage;
+mod terminal;
 mod text_input;
 
 use gpui::{

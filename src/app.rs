@@ -4,7 +4,7 @@ use std::time::Duration;
 use chrono::Local;
 use gpui::{
     deferred, div, prelude::*, px, rgb, uniform_list, ClickEvent, ClipboardItem, Context, Div,
-    ElementId, Entity, MouseButton, ScrollStrategy, SharedString, Stateful, Subscription, Task,
+    ElementId, Entity, FocusHandle, MouseButton, ScrollStrategy, SharedString, Stateful, Subscription, Task,
     UniformListScrollHandle, Window,
 };
 
@@ -12,10 +12,15 @@ use crate::codec;
 use crate::model::{export_text, rows_for, DataMode, Dir, LogEntry, Row};
 use crate::serial::config::{FlowOpt, ParityOpt, PortSettings, BAUD_RATES};
 use crate::serial::worker::{RxMsg, SerialConn};
+use crate::terminal::Terminal;
 use crate::storage::{self, AppConfig, Suffix, BUILTIN_COUNT};
 use crate::text_input::{Submitted, TextInput};
 
 const MAX_ENTRIES: usize = 50_000;
+
+/// Bytes sent by the Enter key in terminal mode: CR, LF, CRLF.
+const EOL_BYTES: [&[u8]; 3] = [&[0x0d], &[0x0a], &[0x0d, 0x0a]];
+const EOL_LABELS: [&str; 3] = ["CR", "LF", "CR+LF"];
 
 // Palette
 const BG: u32 = 0x131519;
@@ -52,6 +57,12 @@ pub struct SerialApp {
     settings: PortSettings,
     custom_baud: Entity<TextInput>,
     conn: Option<SerialConn>,
+
+    term_mode: bool,
+    term_echo: bool,
+    term_eol: usize,
+    terminal: Terminal,
+    term_focus: FocusHandle,
 
     entries: Vec<LogEntry>,
     rows: Vec<Row>,
@@ -105,6 +116,11 @@ impl SerialApp {
             settings: cfg.settings,
             custom_baud,
             conn: None,
+            term_mode: false,
+            term_echo: false,
+            term_eol: 0,
+            terminal: Terminal::new(),
+            term_focus: cx.focus_handle(),
             entries: vec![],
             rows: vec![],
             rx_mode: cfg.rx_mode,
@@ -191,9 +207,9 @@ impl SerialApp {
     }
 
     fn scroll_to_end(&self) {
-        if self.auto_scroll && !self.rows.is_empty() {
-            self.list_scroll
-                .scroll_to_item(self.rows.len() - 1, ScrollStrategy::Bottom);
+        let n = if self.term_mode { self.terminal.line_count() } else { self.rows.len() };
+        if self.auto_scroll && n > 0 {
+            self.list_scroll.scroll_to_item(n - 1, ScrollStrategy::Bottom);
         }
     }
 
@@ -226,6 +242,7 @@ impl SerialApp {
             match m {
                 RxMsg::Data(d) => {
                     self.rx_bytes += d.len() as u64;
+                    self.terminal.feed(&d);
                     self.push_entry(Dir::Rx, d);
                 }
                 RxMsg::Error(e) => {
@@ -234,6 +251,73 @@ impl SerialApp {
                 }
             }
         }
+        cx.notify();
+    }
+
+    /// Terminal mode: translate a key press into the bytes a terminal would send.
+    fn terminal_key(&mut self, ks: &gpui::Keystroke, cx: &mut Context<Self>) {
+        let m = &ks.modifiers;
+        let mut data: Vec<u8> = match ks.key.as_str() {
+            "enter" => EOL_BYTES[self.term_eol].to_vec(),
+            "backspace" => vec![0x7f],
+            "tab" => vec![0x09],
+            "escape" => vec![0x1b],
+            "up" => b"\x1b[A".to_vec(),
+            "down" => b"\x1b[B".to_vec(),
+            "right" => b"\x1b[C".to_vec(),
+            "left" => b"\x1b[D".to_vec(),
+            "home" => b"\x1b[H".to_vec(),
+            "end" => b"\x1b[F".to_vec(),
+            "delete" => b"\x1b[3~".to_vec(),
+            "pageup" => b"\x1b[5~".to_vec(),
+            "pagedown" => b"\x1b[6~".to_vec(),
+            "v" if m.control && m.shift => match cx.read_from_clipboard().and_then(|c| c.text()) {
+                Some(t) => t.into_bytes(),
+                None => return,
+            },
+            k if m.control && k.len() == 1 && k.as_bytes()[0].is_ascii_alphabetic() => {
+                vec![k.as_bytes()[0].to_ascii_lowercase() - b'a' + 1]
+            }
+            _ if m.control || m.platform => return,
+            _ => match &ks.key_char {
+                Some(c) => c.clone().into_bytes(),
+                None => return,
+            },
+        };
+        if m.alt && ks.key_char.is_some() {
+            data.insert(0, 0x1b);
+        }
+        let Some(conn) = self.conn.as_mut() else {
+            self.set_status("串口未打开", true);
+            cx.notify();
+            return;
+        };
+        match conn.write(&data) {
+            Ok(()) => {
+                self.tx_bytes += data.len() as u64;
+                if self.term_echo {
+                    let echo: &[u8] = match ks.key.as_str() {
+                        "enter" => b"\r\n",
+                        "backspace" => b"\x08\x1b[P",
+                        _ if ks.key_char.is_some() || (m.control && m.shift) => &data,
+                        _ => &[],
+                    };
+                    self.terminal.feed(echo);
+                    self.scroll_to_end();
+                }
+            }
+            Err(e) => self.set_status(e.to_string(), true),
+        }
+        cx.notify();
+    }
+
+    fn set_term_mode(&mut self, on: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.term_mode = on;
+        self.open_dd = None;
+        if on {
+            window.focus(&self.term_focus);
+        }
+        self.scroll_to_end();
         cx.notify();
     }
 
@@ -712,24 +796,84 @@ impl SerialApp {
             .bg(rgb(PANEL))
             .border_b_1()
             .border_color(rgb(BORDER))
-            .child(div().text_color(rgb(MUTED)).child("接收显示"))
-            .child(self.seg(
-                "rx-mode",
-                ("ASCII", self.rx_mode == DataMode::Ascii),
-                ("HEX", self.rx_mode == DataMode::Hex),
-                |t, cx| t.set_rx(DataMode::Ascii, cx),
-                |t, cx| t.set_rx(DataMode::Hex, cx),
-                cx,
-            ))
+            .child(div().text_color(rgb(MUTED)).child("模式"))
             .child(
-                Self::button("ts", "时间戳", self.show_ts).on_click(cx.listener(
+                div()
+                    .flex()
+                    .p(px(2.))
+                    .gap_1()
+                    .rounded(px(7.))
+                    .bg(rgb(CTRL))
+                    .border_1()
+                    .border_color(rgb(BORDER))
+                    .children([("mode-dbg", "调试", false), ("mode-term", "终端", true)].map(
+                        |(id, label, term)| {
+                            let active = self.term_mode == term;
+                            div()
+                                .id(id)
+                                .h(px(26.))
+                                .px_3()
+                                .flex()
+                                .items_center()
+                                .rounded(px(5.))
+                                .cursor_pointer()
+                                .text_size(px(12.))
+                                .when(active, |d| d.bg(rgb(ACCENT)).text_color(rgb(0xffffff)))
+                                .when(!active, |d| {
+                                    d.text_color(rgb(MUTED)).hover(|s| s.bg(rgb(CTRL_HOVER)))
+                                })
+                                .child(label)
+                                .on_click(cx.listener(move |this, _: &ClickEvent, w, cx| {
+                                    this.set_term_mode(term, w, cx)
+                                }))
+                        },
+                    )),
+            )
+            .when(!self.term_mode, |d| {
+                d.child(div().text_color(rgb(MUTED)).child("接收显示"))
+                    .child(self.seg(
+                        "rx-mode",
+                        ("ASCII", self.rx_mode == DataMode::Ascii),
+                        ("HEX", self.rx_mode == DataMode::Hex),
+                        |t, cx| t.set_rx(DataMode::Ascii, cx),
+                        |t, cx| t.set_rx(DataMode::Hex, cx),
+                        cx,
+                    ))
+                    .child(
+                        Self::button("ts", "时间戳", self.show_ts).on_click(cx.listener(
+                            |this, _: &ClickEvent, _, cx| {
+                                this.show_ts = !this.show_ts;
+                                this.save();
+                                cx.notify();
+                            },
+                        )),
+                    )
+            })
+            .when(self.term_mode, |d| {
+                d.child(Self::button("echo", "本地回显", self.term_echo).on_click(cx.listener(
                     |this, _: &ClickEvent, _, cx| {
-                        this.show_ts = !this.show_ts;
-                        this.save();
+                        this.term_echo = !this.term_echo;
                         cx.notify();
                     },
-                )),
-            )
+                )))
+            })
+            .when(self.term_mode, |d| {
+                d.child(
+                    Self::button("eol", format!("回车: {}", EOL_LABELS[self.term_eol]), false)
+                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                            this.term_eol = (this.term_eol + 1) % EOL_LABELS.len();
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    Self::button("lfcr", "LF 自动回车", self.terminal.lf_implies_cr).on_click(
+                        cx.listener(|this, _: &ClickEvent, _, cx| {
+                            this.terminal.lf_implies_cr = !this.terminal.lf_implies_cr;
+                            cx.notify();
+                        }),
+                    ),
+                )
+            })
             .child(
                 Self::button("autoscroll", "自动滚动", self.auto_scroll).on_click(cx.listener(
                     |this, _: &ClickEvent, _, cx| {
@@ -743,7 +887,11 @@ impl SerialApp {
             .child(
                 Self::button("copy-all", "复制全部", false).on_click(cx.listener(
                     |this, _: &ClickEvent, _, cx| {
-                        let text = export_text(&this.entries, this.rx_mode, this.tx_mode);
+                        let text = if this.term_mode {
+                            this.terminal.text()
+                        } else {
+                            export_text(&this.entries, this.rx_mode, this.tx_mode)
+                        };
                         cx.write_to_clipboard(ClipboardItem::new_string(text));
                         this.set_status("日志已复制到剪贴板", false);
                         cx.notify();
@@ -755,6 +903,7 @@ impl SerialApp {
                     |this, _: &ClickEvent, _, cx| {
                         this.entries.clear();
                         this.rows.clear();
+                        this.terminal.clear();
                         this.tx_bytes = 0;
                         this.rx_bytes = 0;
                         cx.notify();
@@ -841,6 +990,64 @@ impl SerialApp {
                 )
                 .track_scroll(self.list_scroll.clone())
                 .size_full(),
+            )
+    }
+
+    fn terminal_view(&self, cx: &mut Context<Self>) -> Div {
+        div()
+            .flex_1()
+            .min_h_0()
+            .m_3()
+            .relative()
+            .overflow_hidden()
+            .rounded(px(10.))
+            .border_1()
+            .border_color(rgb(BORDER))
+            .bg(rgb(0x0c0e11))
+            .font_family("Consolas")
+            .text_size(px(13.))
+            .child(
+                div()
+                    .id("terminal")
+                    .size_full()
+                    .track_focus(&self.term_focus)
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _, w, _| w.focus(&this.term_focus)),
+                    )
+                    .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, _, cx| {
+                        this.terminal_key(&e.keystroke, cx);
+                        cx.stop_propagation();
+                    }))
+                    .child(
+                        uniform_list(
+                            "term-lines",
+                            self.terminal.line_count(),
+                            cx.processor(|this, range: Range<usize>, w: &mut Window, _cx| {
+                                let cursor = this.term_focus.is_focused(w);
+                                range
+                                    .map(|ix| {
+                                        div()
+                                            .h(px(20.))
+                                            .px_3()
+                                            .whitespace_nowrap()
+                                            .flex()
+                                            .text_color(rgb(TEXT))
+                                            .children(this.terminal.runs(ix, cursor).into_iter().map(
+                                                |(text, fg)| {
+                                                    div()
+                                                        .flex_none()
+                                                        .text_color(rgb(fg.unwrap_or(TEXT)))
+                                                        .child(text)
+                                                },
+                                            ))
+                                    })
+                                    .collect::<Vec<_>>()
+                            }),
+                        )
+                        .track_scroll(self.list_scroll.clone())
+                        .size_full(),
+                    ),
             )
     }
 
@@ -989,8 +1196,8 @@ impl Render for SerialApp {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let config = self.config_panel(cx);
         let toolbar = self.toolbar(cx);
-        let log = self.log_view(cx);
-        let send = self.send_panel(cx);
+        let log = if self.term_mode { self.terminal_view(cx) } else { self.log_view(cx) };
+        let send = (!self.term_mode).then(|| self.send_panel(cx));
         let status = self.status_bar();
 
         div()
@@ -1016,7 +1223,7 @@ impl Render for SerialApp {
                             .flex_col()
                             .child(toolbar)
                             .child(log)
-                            .child(send),
+                            .children(send),
                     ),
             )
             .child(status)

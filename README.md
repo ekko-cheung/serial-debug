@@ -15,6 +15,8 @@
 - **Timestamps** — every sent and received message is shown with an `HH:MM:SS.mmm` timestamp (can be toggled).
 - **Send suffixes** — built-in `\r`, `\n`, `\r\n` and "none", plus your own custom suffixes. Custom suffixes use escape syntax (`\r \n \t \0 \\ \xNN`), e.g. `\x0D\x0A\x00`, and are saved between sessions.
 - **Receive framing** — bytes arriving close together are merged into a single log entry (a short idle gap ends a frame).
+- **Terminal mode** — switch to an interactive terminal: keystrokes (including arrows, Ctrl+key, Ctrl+Shift+V paste) go straight to the port, and received text is rendered with ``/`
+`/backspace handling and ANSI escape sequences filtered. Optional local echo.
 - **Convenience** — auto-scroll, clear, copy the whole log to the clipboard, TX/RX byte counters, and persisted settings.
 
 Only the standard serial port protocol is supported for now.
