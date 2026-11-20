@@ -17,9 +17,10 @@
 - **Receive framing** — bytes arriving close together are merged into a single log entry (a short idle gap ends a frame).
 - **Terminal mode** — switch to an interactive terminal: keystrokes (including arrows, Ctrl+key, Ctrl+Shift+V paste) go straight to the port, and received text is rendered with ``/`
 `/backspace handling and ANSI escape sequences filtered. Optional local echo.
+- **Modbus RTU master** — a third mode with the eight common function codes (01, 02, 03, 04, 05, 06, 0F, 10), automatic CRC-16 and broadcast support. Requests can be sent once or polled at a configurable interval; register values can optionally be decoded as u16/i16/u32/i32/f32 with ABCD/CDAB/BADC/DCBA byte/word order. Parsed responses are shown in a dedicated table while the raw TX/RX frames are written to the HEX log.
 - **Convenience** — auto-scroll, clear, copy the whole log to the clipboard, TX/RX byte counters, and persisted settings.
 
-Only the standard serial port protocol is supported for now.
+Only serial port connections are supported for now: plain serial plus Modbus RTU over serial. There is no Modbus TCP or other network transport.
 
 ## Download
 
@@ -34,6 +35,18 @@ Prebuilt binaries for Windows, Linux and macOS (Intel and Apple silicon) are bui
 4. Use the **Receive display** switch above the log to view incoming data as ASCII or HEX.
 
 To add a custom suffix, click **Add suffix**, enter a name and its content in escape syntax, and confirm.
+
+### Modbus RTU
+
+1. Switch the mode selector to **Modbus** and configure the serial port as usual (most Modbus RTU devices use 8N1 or 8E1 with 9600, 19200 or 115200 baud).
+2. Pick the slave address (0 is broadcast for write requests) and a function code, then fill in the start address plus the quantity — or, for the write-multiple functions, the values:
+   - coils for 0F: a `0`/`1` sequence such as `1 0 1 1`;
+   - registers for 10: decimal or `0x` values such as `0 100 0x1F`.
+3. Click **Send**. The parsed result (values, exception code or error message) is added to the results table, while the complete request and response frames are appended to the log in HEX. The CRC is calculated and checked automatically.
+4. Toggle **Poll** and set an interval in milliseconds to repeat the request; toggle it again to stop. Responses time out after one second.
+5. For 03/04 reads, choose a decoding format. The 32-bit formats combine two registers and let you select the byte/word order (ABCD, CDAB, BADC or DCBA).
+
+Settings for the Modbus form (including the last request and its decoding options) are persisted with the rest of the configuration.
 
 Settings are stored in `%APPDATA%\serial-debug\config.json` on Windows (the `APPDATA` environment variable is used; if it is not set, settings are not persisted).
 

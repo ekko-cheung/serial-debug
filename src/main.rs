@@ -2,6 +2,7 @@
 
 mod app;
 mod codec;
+mod modbus;
 mod model;
 mod serial;
 mod storage;
