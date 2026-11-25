@@ -1184,6 +1184,39 @@ impl SerialApp {
                     .child(if connected { "已连接" } else { "未连接" }),
             );
 
+        let dtr_on_open = div()
+            .id("dtr-on-open")
+            .flex()
+            .items_center()
+            .gap_2()
+            .text_size(px(12.))
+            .text_color(rgb(if connected { MUTED } else { TEXT }))
+            .child(
+                div()
+                    .size(px(16.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(3.))
+                    .border_1()
+                    .border_color(rgb(if s.dtr_on_open { ACCENT } else { MUTED }))
+                    .bg(rgb(if s.dtr_on_open { ACCENT } else { CTRL }))
+                    .text_color(rgb(0xffffff))
+                    .when(s.dtr_on_open, |d| d.child("✓")),
+            )
+            .child("打开串口时启用 DTR")
+            .when(connected, |d| d.opacity(0.6))
+            .when(!connected, |d| {
+                d.cursor_pointer()
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        if this.conn.is_none() {
+                            this.settings.dtr_on_open = !this.settings.dtr_on_open;
+                            this.save(cx);
+                            cx.notify();
+                        }
+                    }))
+            });
+
         let open_button = Self::button(
             "open-close",
             if connected {
@@ -1216,6 +1249,7 @@ impl SerialApp {
                     .flex_col()
                     .gap_3()
                     .child(Self::field("串口", port_row))
+                    .child(dtr_on_open)
                     .child(open_button),
             ))
             .child(Self::card(

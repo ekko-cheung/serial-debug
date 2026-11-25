@@ -28,12 +28,18 @@ impl SerialConn {
         if s.port_name.is_empty() {
             return Err(anyhow!("未选择串口"));
         }
-        let port = serialport::new(&s.port_name, s.baud_rate)
+        let builder = serialport::new(&s.port_name, s.baud_rate)
             .data_bits(s.data_bits())
             .stop_bits(s.stop_bits())
             .parity(s.parity())
             .flow_control(s.flow())
-            .timeout(Duration::from_millis(20))
+            .timeout(Duration::from_millis(20));
+        let builder = if s.dtr_on_open {
+            builder.dtr_on_open(true)
+        } else {
+            builder
+        };
+        let port = builder
             .open()
             .map_err(|e| anyhow!("打开 {} 失败: {}", s.port_name, e))?;
         let mut reader = port

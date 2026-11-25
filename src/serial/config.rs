@@ -51,6 +51,7 @@ pub struct PortSettings {
     pub stop_bits: u8,
     pub parity: ParityOpt,
     pub flow: FlowOpt,
+    pub dtr_on_open: bool,
 }
 
 impl Default for PortSettings {
@@ -62,6 +63,7 @@ impl Default for PortSettings {
             stop_bits: 1,
             parity: ParityOpt::None,
             flow: FlowOpt::None,
+            dtr_on_open: false,
         }
     }
 }

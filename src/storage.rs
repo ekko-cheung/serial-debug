@@ -111,7 +111,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn old_config_without_modbus_uses_defaults() {
+    fn old_config_without_modbus_or_dtr_uses_defaults() {
         let json = r#"{
             "settings": {
                 "port_name": "COM2",
@@ -130,6 +130,16 @@ mod tests {
         }"#;
         let cfg: AppConfig = serde_json::from_str(json).unwrap();
         assert_eq!(cfg.modbus, ModbusConfig::default());
+        assert!(!cfg.settings.dtr_on_open);
+    }
+
+    #[test]
+    fn enabled_dtr_round_trips() {
+        let mut cfg = AppConfig::default();
+        cfg.settings.dtr_on_open = true;
+        let json = serde_json::to_string(&cfg).unwrap();
+        let back: AppConfig = serde_json::from_str(&json).unwrap();
+        assert!(back.settings.dtr_on_open);
     }
 
     #[test]
