@@ -21,7 +21,7 @@ fn main() {
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 titlebar: Some(TitlebarOptions {
-                    title: Some("串口调试助手".into()),
+                    title: Some(concat!("串口调试助手 v", env!("CARGO_PKG_VERSION")).into()),
                     ..Default::default()
                 }),
                 ..Default::default()
