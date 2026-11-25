@@ -425,7 +425,10 @@ impl Render for SerialApp {
         let main = div().flex_1().min_w_0().flex().flex_col().child(toolbar);
         let main = match self.mode {
             Mode::Terminal => main.child(self.terminal_view(cx)),
-            Mode::Debug => main.child(self.log_view(cx)).child(self.send_panel(cx)),
+            Mode::Debug => main
+                .child(self.log_view(cx))
+                .child(self.send_panel(cx))
+                .child(self.commands_panel(cx)),
             Mode::Modbus => main
                 .child(self.modbus_results_view(cx))
                 .child(self.log_view(cx))

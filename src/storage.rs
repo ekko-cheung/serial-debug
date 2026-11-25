@@ -13,6 +13,14 @@ pub struct Suffix {
     pub text: String,
 }
 
+/// A saved serial command with the original encoding and suffix.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+pub struct SavedCommand {
+    pub text: String,
+    pub mode: DataMode,
+    pub suffix: String,
+}
+
 pub const BUILTIN_COUNT: usize = 4;
 
 pub fn builtin_suffixes() -> Vec<Suffix> {
@@ -61,6 +69,7 @@ impl Default for ModbusConfig {
 pub struct AppConfig {
     pub settings: PortSettings,
     pub custom_suffixes: Vec<Suffix>,
+    pub saved_commands: Vec<SavedCommand>,
     pub suffix_idx: usize,
     pub tx_mode: DataMode,
     pub rx_mode: DataMode,
@@ -74,6 +83,7 @@ impl Default for AppConfig {
         Self {
             settings: PortSettings::default(),
             custom_suffixes: vec![],
+            saved_commands: vec![],
             suffix_idx: 3,
             tx_mode: DataMode::Ascii,
             rx_mode: DataMode::Ascii,
@@ -131,6 +141,29 @@ mod tests {
         let cfg: AppConfig = serde_json::from_str(json).unwrap();
         assert_eq!(cfg.modbus, ModbusConfig::default());
         assert!(!cfg.settings.dtr_on_open);
+        assert!(cfg.saved_commands.is_empty());
+    }
+
+    #[test]
+    fn saved_commands_keep_order_and_send_settings() {
+        let cfg = AppConfig {
+            saved_commands: vec![
+                SavedCommand {
+                    text: "AT".into(),
+                    mode: DataMode::Ascii,
+                    suffix: "\\r\\n".into(),
+                },
+                SavedCommand {
+                    text: "AA 55".into(),
+                    mode: DataMode::Hex,
+                    suffix: String::new(),
+                },
+            ],
+            ..AppConfig::default()
+        };
+        let json = serde_json::to_string(&cfg).unwrap();
+        let restored: AppConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.saved_commands, cfg.saved_commands);
     }
 
     #[test]

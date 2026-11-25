@@ -1,3 +1,4 @@
+mod commands;
 mod connection;
 mod log;
 mod modbus_master;
@@ -15,7 +16,7 @@ use gpui::{
 use crate::model::{DataMode, LogEntry, Row};
 use crate::serial::config::PortSettings;
 use crate::serial::worker::SerialConn;
-use crate::storage::{self, AppConfig, BUILTIN_COUNT, Suffix};
+use crate::storage::{self, AppConfig, BUILTIN_COUNT, SavedCommand, Suffix};
 use crate::terminal::Terminal;
 use crate::text_input::{Submitted, TextInput};
 
@@ -56,6 +57,7 @@ pub struct SerialApp {
     suffix_name: Entity<TextInput>,
     suffix_text: Entity<TextInput>,
     send_input: Entity<TextInput>,
+    saved_commands: Vec<SavedCommand>,
 
     open_dropdown: Option<Dropdown>,
     status: Option<(String, bool)>,
@@ -123,6 +125,7 @@ impl SerialApp {
             suffix_name,
             suffix_text,
             send_input,
+            saved_commands: cfg.saved_commands,
             open_dropdown: None,
             status: None,
             tx_bytes: 0,
@@ -143,6 +146,7 @@ impl SerialApp {
         storage::save(&AppConfig {
             settings: self.settings.clone(),
             custom_suffixes: self.custom_suffixes.clone(),
+            saved_commands: self.saved_commands.clone(),
             suffix_idx: self.suffix_idx,
             tx_mode: self.tx_mode,
             rx_mode: self.rx_mode,

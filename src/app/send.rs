@@ -1,8 +1,8 @@
-use gpui::{ClickEvent, Context, Div, div, prelude::*, px, rgb};
+use gpui::{App, ClickEvent, Context, Div, div, prelude::*, px, rgb};
 
 use crate::codec;
 use crate::model::{DataMode, Dir};
-use crate::storage::{self, BUILTIN_COUNT, Suffix};
+use crate::storage::{self, BUILTIN_COUNT, SavedCommand, Suffix};
 
 use super::SerialApp;
 use super::ui::{BORDER, Dropdown, MUTED, PANEL, RED};
@@ -15,27 +15,27 @@ impl SerialApp {
     }
 
     pub(super) fn send(&mut self, cx: &mut Context<Self>) {
-        let text = self.send_input.read(cx).text().to_string();
-        let mut data = match self.tx_mode {
-            DataMode::Ascii => text.into_bytes(),
-            DataMode::Hex => match codec::parse_hex(&text) {
-                Ok(v) => v,
-                Err(e) => {
-                    self.set_status(e.to_string(), true);
-                    cx.notify();
-                    return;
-                }
-            },
-        };
-        let suffix = self.all_suffixes()[self.suffix_idx].clone();
-        match codec::parse_escapes(&suffix.text) {
-            Ok(s) => data.extend(s),
+        let data = self.current_command(cx).encode();
+        self.send_payload(data, cx);
+    }
+
+    pub(super) fn current_command(&self, cx: &App) -> SavedCommand {
+        SavedCommand {
+            text: self.send_input.read(cx).text().to_string(),
+            mode: self.tx_mode,
+            suffix: self.all_suffixes()[self.suffix_idx].text.clone(),
+        }
+    }
+
+    pub(super) fn send_payload(&mut self, data: Result<Vec<u8>, String>, cx: &mut Context<Self>) {
+        let data = match data {
+            Ok(data) => data,
             Err(e) => {
-                self.set_status(format!("后缀无效: {e}"), true);
+                self.set_status(e, true);
                 cx.notify();
                 return;
             }
-        }
+        };
         if data.is_empty() {
             return;
         }
